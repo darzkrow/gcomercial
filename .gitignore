@@ -1,0 +1,38 @@
+# Entornos virtuales
+venv/
+.venv/
+env/
+ENV/
+
+# Python cache y compilados
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Variables de entorno y secretos (NUNCA SUBIR AL CONTROL DE VERSIONES)
+.env
+.env.*
+!.env.example
+
+# Base de datos local
+*.sqlite3
+db.sqlite3
+
+# Archivos estáticos y media recolectados
+backend/staticfiles/
+backend/media/
+staticfiles/
+media/
+
+# IDEs y editores
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Node / Frontend
+node_modules/
+dist/
+.DS_Store

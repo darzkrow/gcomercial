@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Navbar from './components/Navbar';
+import Sidebar from './components/Sidebar';
 import LoginView from './components/LoginView';
 import StatsOverview from './components/StatsOverview';
 import AplicativoCard from './components/AplicativoCard';
 import AplicativoModal from './components/AplicativoModal';
 import DeleteConfirmModal from './components/DeleteConfirmModal';
+import AnalyticsView from './components/AnalyticsView';
+import DirectoryView from './components/DirectoryView';
 import ToastContainer from './components/Toast';
 import { aplicativosService } from './services/aplicativosService';
 import { authService } from './services/authService';
 import { subscribeAuth, isAuthenticated, getCurrentUser } from './services/authFetch';
-import { Plus, Search, RefreshCw, Layers, ShieldAlert, Sparkles } from 'lucide-react';
+import { Plus, Search, RefreshCw, Layers, ShieldAlert, Sparkles, Filter } from 'lucide-react';
 
 export default function App() {
   const [authed, setAuthed] = useState(isAuthenticated());
@@ -17,7 +20,11 @@ export default function App() {
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterDeptOnly, setFilterDeptOnly] = useState(false);
+  
+  // Navegación del Dashboard
+  const [activeTab, setActiveTab] = useState('launchpad'); // 'launchpad' | 'analytics' | 'directory'
+  const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'dept' | 'active'
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // Modales
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -78,6 +85,7 @@ export default function App() {
   const handleLoginSuccess = (loginData) => {
     setAuthed(true);
     setCurrentUser(loginData.user);
+    setActiveTab('launchpad');
   };
 
   // Manejo de cierre de sesión
@@ -126,12 +134,17 @@ export default function App() {
     }
   };
 
-  // Filtrado en el cliente para el filtro rápido de departamento
+  // Filtrado en el cliente para el filtro rápido de departamento y estado
   const userDept = (currentUser?.profile?.department || '').toLowerCase().trim();
   const displayedApps = apps.filter((app) => {
-    if (!filterDeptOnly || !userDept) return true;
-    const appDepts = (app.departamentos_ad || []).map((d) => d.toLowerCase().trim());
-    return appDepts.includes(userDept);
+    if (activeFilter === 'dept' && userDept) {
+      const appDepts = (app.departamentos_ad || []).map((d) => d.toLowerCase().trim());
+      if (!appDepts.includes(userDept)) return false;
+    }
+    if (activeFilter === 'active') {
+      if (!app.activo) return false;
+    }
+    return true;
   });
 
   return (
@@ -142,132 +155,172 @@ export default function App() {
         <div className="ambient-orb-2" />
       </div>
 
-      {/* Barra de Navegación */}
-      <Navbar user={currentUser} onLogout={handleLogout} />
-
-      {/* Contenido Principal: Login o Panel de Aplicativos */}
+      {/* Contenido Principal: Login o Dashboard con Sidebar */}
       {!authed ? (
-        <LoginView onLoginSuccess={handleLoginSuccess} showToast={showToast} />
+        <>
+          <Navbar user={null} onLogout={handleLogout} />
+          <LoginView onLoginSuccess={handleLoginSuccess} showToast={showToast} />
+        </>
       ) : (
-        <main className="main-content" id="dashboard-main-content">
-          {/* Bienvenida y Encabezado */}
-          <div className="dashboard-header" id="dashboard-header-container">
-            <div className="welcome-section" id="welcome-text-section">
-              <h2 style={{ fontSize: '1.9rem', fontWeight: 800, color: 'var(--white)', letterSpacing: '-0.02em' }}>
-                Launchpad de Aplicativos
-              </h2>
-              <p>
-                Accesos directos protegidos con tokens JWT y permisos corporativos de Active Directory.
-              </p>
-            </div>
+        <div className="dashboard-layout" id="dashboard-layout-root">
+          {/* Barra Lateral Dashboard */}
+          <Sidebar
+            user={currentUser}
+            apps={apps}
+            activeTab={activeTab}
+            onSelectTab={setActiveTab}
+            activeFilter={activeFilter}
+            onSelectFilter={setActiveFilter}
+            onLogout={handleLogout}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
+          />
 
-            <button
-              id="btn-open-create-modal"
-              className="btn btn-primary"
-              onClick={() => {
-                setEditingApp(null);
-                setIsModalOpen(true);
-              }}
-            >
-              <Plus size={18} />
-              <span>Nuevo Aplicativo</span>
-            </button>
-          </div>
+          {/* Área Principal con Encabezado y Vistas */}
+          <div className="dashboard-main-wrapper" id="dashboard-main-wrapper">
+            <Navbar 
+              user={currentUser} 
+              onLogout={handleLogout} 
+              activeTab={activeTab}
+              onSelectTab={setActiveTab}
+            />
 
-          {/* Resumen de Estadísticas Glass */}
-          <StatsOverview apps={apps} user={currentUser} />
+            <main className="main-content" id="dashboard-main-content">
+              {/* VISTA 1: LAUNCHPAD DE APLICATIVOS */}
+              {activeTab === 'launchpad' && (
+                <>
+                  {/* Bienvenida y Encabezado */}
+                  <div className="dashboard-header" id="dashboard-header-container">
+                    <div className="welcome-section" id="welcome-text-section">
+                      <h2 style={{ fontSize: '1.9rem', fontWeight: 800, color: 'var(--white)', letterSpacing: '-0.02em' }}>
+                        Launchpad de Aplicativos
+                      </h2>
+                      <p>
+                        Accesos directos protegidos con tokens JWT y permisos corporativos de Active Directory.
+                      </p>
+                    </div>
 
-          {/* Barra de Herramientas y Búsqueda */}
-          <div className="filter-toolbar-glass" id="filter-toolbar-section">
-            <div className="search-input-wrapper" id="search-input-wrapper">
-              <span className="input-icon-left" style={{ left: '0.9rem' }}>
-                <Search size={16} color="var(--white-50)" />
-              </span>
-              <input
-                id="input-search-apps"
-                type="text"
-                className="input-glass"
-                placeholder="Buscar por nombre, descripción o grupo AD..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ paddingLeft: '2.5rem' }}
-              />
-            </div>
+                    <button
+                      id="btn-open-create-modal"
+                      className="btn btn-primary"
+                      onClick={() => {
+                        setEditingApp(null);
+                        setIsModalOpen(true);
+                      }}
+                    >
+                      <Plus size={18} />
+                      <span>Nuevo Aplicativo</span>
+                    </button>
+                  </div>
 
-            <div className="filter-actions" id="filter-actions-group">
-              {currentUser?.profile?.department && (
-                <button
-                  id="btn-filter-my-dept"
-                  className={`btn btn-sm ${filterDeptOnly ? 'btn-primary' : 'btn-glass'}`}
-                  onClick={() => setFilterDeptOnly(!filterDeptOnly)}
-                >
-                  <Sparkles size={14} />
-                  <span>Mi Depto ({currentUser.profile.department})</span>
-                </button>
+                  {/* Resumen de Estadísticas Glass */}
+                  <StatsOverview apps={apps} user={currentUser} />
+
+                  {/* Barra de Herramientas y Búsqueda */}
+                  <div className="filter-toolbar-glass" id="filter-toolbar-section">
+                    <div className="search-input-wrapper" id="search-input-wrapper">
+                      <span className="input-icon-left" style={{ left: '0.9rem' }}>
+                        <Search size={16} color="var(--white-50)" />
+                      </span>
+                      <input
+                        id="input-search-apps"
+                        type="text"
+                        className="input-glass"
+                        placeholder="Buscar por nombre, descripción o grupo AD..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        style={{ paddingLeft: '2.5rem' }}
+                      />
+                    </div>
+
+                    <div className="filter-actions" id="filter-actions-group">
+                      {currentUser?.profile?.department && (
+                        <button
+                          id="btn-filter-my-dept"
+                          className={`btn btn-sm ${activeFilter === 'dept' ? 'btn-primary' : 'btn-glass'}`}
+                          onClick={() => setActiveFilter((prev) => (prev === 'dept' ? 'all' : 'dept'))}
+                        >
+                          <Sparkles size={14} />
+                          <span>Mi Depto ({currentUser.profile.department})</span>
+                        </button>
+                      )}
+
+                      <button
+                        id="btn-refresh-apps"
+                        className="btn btn-glass btn-sm"
+                        onClick={fetchApps}
+                        disabled={loading}
+                        title="Actualizar listado"
+                      >
+                        <RefreshCw size={14} className={loading ? 'spinner-icon' : ''} />
+                        <span>Actualizar</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Grilla de Aplicativos */}
+                  {loading && apps.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--white-70)' }}>
+                      <RefreshCw size={28} className="spinner-icon" style={{ margin: '0 auto 1rem' }} />
+                      <p>Consultando aplicativos autorizados...</p>
+                    </div>
+                  ) : displayedApps.length > 0 ? (
+                    <div className="apps-grid" id="apps-cards-grid">
+                      {displayedApps.map((app) => (
+                        <AplicativoCard
+                          key={app.id}
+                          app={app}
+                          onEdit={(item) => {
+                            setEditingApp(item);
+                            setIsModalOpen(true);
+                          }}
+                          onDelete={(item) => setAppToDelete(item)}
+                          canManage={true}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="empty-state-glass" id="empty-state-container">
+                      <div className="empty-icon-circle">
+                        <Layers size={36} />
+                      </div>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                        No se encontraron aplicativos
+                      </h3>
+                      <p style={{ color: 'var(--white-70)', fontSize: '0.88rem', marginBottom: '1.5rem' }}>
+                        {searchQuery || activeFilter !== 'all'
+                          ? 'No hay aplicativos que coincidan con los filtros de búsqueda o categoría aplicados.'
+                          : 'Aún no tiene aplicativos vinculados para sus permisos o grupos de Active Directory.'}
+                      </p>
+                      {(searchQuery || activeFilter !== 'all') && (
+                        <button
+                          id="btn-clear-filters"
+                          className="btn btn-glass btn-sm"
+                          onClick={() => {
+                            setSearchQuery('');
+                            setActiveFilter('all');
+                          }}
+                        >
+                          Limpiar Filtros
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
 
-              <button
-                id="btn-refresh-apps"
-                className="btn btn-glass btn-sm"
-                onClick={fetchApps}
-                disabled={loading}
-                title="Actualizar listado"
-              >
-                <RefreshCw size={14} className={loading ? 'spinner-icon' : ''} />
-                <span>Actualizar</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Grilla de Aplicativos */}
-          {loading && apps.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--white-70)' }}>
-              <RefreshCw size={28} className="spinner-icon" style={{ margin: '0 auto 1rem' }} />
-              <p>Consultando aplicativos autorizados...</p>
-            </div>
-          ) : displayedApps.length > 0 ? (
-            <div className="apps-grid" id="apps-cards-grid">
-              {displayedApps.map((app) => (
-                <AplicativoCard
-                  key={app.id}
-                  app={app}
-                  onEdit={(item) => {
-                    setEditingApp(item);
-                    setIsModalOpen(true);
-                  }}
-                  onDelete={(item) => setAppToDelete(item)}
-                  canManage={true}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state-glass" id="empty-state-container">
-              <div className="empty-icon-circle">
-                <Layers size={36} />
-              </div>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-                No se encontraron aplicativos
-              </h3>
-              <p style={{ color: 'var(--white-70)', fontSize: '0.88rem', marginBottom: '1.5rem' }}>
-                {searchQuery || filterDeptOnly
-                  ? 'No hay aplicativos que coincidan con los criterios de búsqueda aplicados.'
-                  : 'Aún no tiene aplicativos vinculados para sus permisos o grupos de Active Directory.'}
-              </p>
-              {(searchQuery || filterDeptOnly) && (
-                <button
-                  id="btn-clear-filters"
-                  className="btn btn-glass btn-sm"
-                  onClick={() => {
-                    setSearchQuery('');
-                    setFilterDeptOnly(false);
-                  }}
-                >
-                  Limpiar Filtros
-                </button>
+              {/* VISTA 2: MÉTRICAS Y ANALÍTICAS */}
+              {activeTab === 'analytics' && (
+                <AnalyticsView showToast={showToast} />
               )}
-            </div>
-          )}
-        </main>
+
+              {/* VISTA 3: DIRECTORIO ACTIVE DIRECTORY */}
+              {activeTab === 'directory' && (
+                <DirectoryView user={currentUser} />
+              )}
+            </main>
+          </div>
+        </div>
       )}
 
       {/* Modal de Creación / Edición */}

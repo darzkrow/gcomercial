@@ -76,16 +76,16 @@ def serialize_user(user):
 def api_login_required(view_func):
     """
     Decorador para endpoints API REST que exige autenticación.
-    Si el usuario no está autenticado, devuelve 401 Unauthorized en JSON.
+    Soporta tanto tokens Bearer JWT como sesiones autenticadas de Django.
     """
     @wraps(view_func)
     def _wrapped_view(request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            return json_error(
-                "Autenticación requerida. Por favor inicie sesión.",
-                status=401,
-                code="UNAUTHORIZED"
-            )
+        if not getattr(request, 'user', None) or not request.user.is_authenticated:
+            from core.jwt_auth import get_user_from_request
+            user, error = get_user_from_request(request)
+            if error:
+                return json_error(error['error'], status=error['status'], code=error['code'])
+            request.user = user
         return view_func(request, *args, **kwargs)
     return _wrapped_view
 
@@ -93,12 +93,16 @@ def api_login_required(view_func):
 def api_staff_required(view_func):
     """
     Decorador para endpoints API REST que exige privilegios de Staff.
-    Devuelve 403 Forbidden en JSON si no cuenta con permisos.
+    Soporta tanto tokens Bearer JWT como sesiones autenticadas de Django.
     """
     @wraps(view_func)
     def _wrapped_view(request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            return json_error("Autenticación requerida.", status=401, code="UNAUTHORIZED")
+        if not getattr(request, 'user', None) or not request.user.is_authenticated:
+            from core.jwt_auth import get_user_from_request
+            user, error = get_user_from_request(request)
+            if error:
+                return json_error(error['error'], status=error['status'], code=error['code'])
+            request.user = user
         if not request.user.is_staff:
             return json_error(
                 "Acceso restringido. Se requieren permisos de administración (Staff).",

@@ -131,12 +131,44 @@ Si el día de mañana se migra a `api/v2/`, basta con cambiar el valor en `.env`
               "job_title": "Ejecutivo de Cuentas",
               "phone": "+56 9 8765 4321",
               "ad_groups": ["GestionComercial_Usuarios", "Ventas_Chile"]
+          },
+          "tokens": {
+              "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+              "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+              "token_type": "Bearer",
+              "expires_in": 3600,
+              "expires_at": "2026-10-06T23:20:00Z"
           }
       }
   }
   ```
 
-#### B. Cierre de Sesión (Logout)
+#### B. Renovación de Tokens JWT (Refresh Token)
+- **Ruta:** `/{API_PREFIX}auth/refresh/` (por defecto: `/api/v1/auth/refresh/`)
+- **Método:** `POST`
+- **Autenticación:** Pública (requiere enviar el `refresh_token` en el body)
+- **Request Body:**
+  ```json
+  {
+      "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }
+  ```
+- **Response Exitosa (`200 OK`):**
+  ```json
+  {
+      "success": true,
+      "message": "Token de acceso renovado exitosamente.",
+      "data": {
+          "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+          "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+          "token_type": "Bearer",
+          "expires_in": 3600,
+          "expires_at": "2026-10-06T23:20:00Z"
+      }
+  }
+  ```
+
+#### C. Cierre de Sesión (Logout)
 - **Ruta:** `/{API_PREFIX}auth/logout/` (por defecto: `/api/v1/auth/logout/`)
 - **Método:** `POST`
 - **Autenticación:** Requerida (`login_required`)
@@ -205,6 +237,111 @@ Si el día de mañana se migra a `api/v2/`, basta con cambiar el valor en `.env`
               {"name": "Operaciones", "total": 4}
           ]
       }
+  }
+  ```
+
+### 4.4. Catálogo de Aplicativos y Enlaces Externos (`/api/v1/aplicativos/`)
+
+Permite gestionar los accesos directos y enlaces hacia diferentes aplicativos internos y externos (Launchpad). Cada aplicativo cuenta con su nombre, URL de destino, logo (URL o archivo subido), descripción, orden, estado activo y **control de acceso basado en permisos**.
+
+> [!IMPORTANT]
+> **Autenticación Obligatoria y Seguridad JWT:**
+> **Todas las URLs del módulo de aplicativos requieren obligatoriamente autenticación.** No existe ninguna URL pública ni anónima. Toda solicitud debe incluir un token JWT vigente en el encabezado `Authorization: Bearer <token>`.
+> Si el token ha expirado, la API responderá con `401 Unauthorized` (`code: "TOKEN_EXPIRED"`). Si no se suministra el encabezado o es inválido, responderá con `401 Unauthorized` (`code: "UNAUTHORIZED"` o `"INVALID_TOKEN"`).
+
+#### Control de Acceso y Visibilidad:
+- Los aplicativos protegidos **solo son visibles en el listado y detalle** si el usuario solicitante cuenta con los permisos necesarios:
+  - **Superusuario:** Acceso total e irrestricto a todos los aplicativos.
+  - **Permiso Django o Grupo:** Coincidencia con `user.has_perm()` o grupos de Django del usuario.
+  - **Active Directory (AD / LDAP):** Coincidencia con los grupos corporativos sincronizados en `user.profile.ad_groups` o departamentos corporativos en `user.profile.department`.
+
+#### A. Listar Aplicativos
+- **Ruta:** `/{API_PREFIX}aplicativos/` (por defecto: `/api/v1/aplicativos/`)
+- **Método:** `GET`
+- **Autenticación:** Obligatoria (`Bearer <token>`)
+- **Filtro de Seguridad:** La API evalúa automáticamente los privilegios de la sesión del usuario y **solo devuelve los aplicativos autorizados**.
+- **Query Params opcionales:**
+  - `activo=true|false`: Filtra por estado de disponibilidad.
+  - `search=texto`: Búsqueda por nombre, descripción o URL.
+  - `order_by=orden|-orden|nombre|-nombre|created_at`: Criterio de ordenamiento.
+- **Response Exitosa (`200 OK`):**
+  ```json
+  {
+      "success": true,
+      "message": "Listado de aplicativos obtenido exitosamente.",
+      "data": {
+          "total": 1,
+          "aplicativos": [
+              {
+                  "id": 1,
+                  "nombre": "ERP SAP",
+                  "url": "https://sap.empresa.com",
+                  "logo": "https://sap.empresa.com/logo.svg",
+                  "logo_url": "https://sap.empresa.com/logo.svg",
+                  "logo_archivo": null,
+                  "descripcion": "Planificación de recursos empresariales",
+                  "orden": 1,
+                  "activo": true,
+                  "grupos_ad": ["Ventas_Chile", "GPO_ERP_Users"],
+                  "departamentos_ad": ["Comercial", "Ventas"],
+                  "permiso_requerido": "aplicativos.acceso_sap",
+                  "grupos": ["Finanzas_Staff"],
+                  "permisos": ["aplicativos.acceso_sap"],
+                  "created_at": "2026-10-06T22:00:00Z",
+                  "updated_at": "2026-10-06T22:00:00Z"
+              }
+          ]
+      }
+  }
+  ```
+
+#### B. Crear Nuevo Aplicativo
+- **Ruta:** `/{API_PREFIX}aplicativos/` (por defecto: `/api/v1/aplicativos/`)
+- **Método:** `POST`
+- **Content-Type:** `application/json` o `multipart/form-data`
+- **Campos requeridos:** `nombre`, `url`
+- **Campos opcionales:**
+  - `grupos_ad` (cadena o lista de grupos de Active Directory, ej: `["Ventas_Chile", "GPO_ERP"]`)
+  - `departamentos_ad` (cadena o lista de departamentos de AD, ej: `["Comercial", "Finanzas"]`)
+  - `logo` (URL o ícono web)
+  - `logo_archivo` (archivo PNG, SVG, JPG, WebP)
+  - `descripcion` (texto explicativo)
+  - `orden` (número entero de prioridad)
+  - `activo` (booleano)
+  - `permiso_requerido` (cadena de texto con permiso Django o grupo AD)
+  - `grupos` (lista de nombres o IDs de grupos Django)
+  - `permisos` (lista de codenames o IDs de permisos Django)
+- **Response Exitosa (`201 Created`):**
+  ```json
+  {
+      "success": true,
+      "message": "Aplicativo 'ERP SAP' creado exitosamente.",
+      "data": { ... }
+  }
+  ```
+
+#### C. Detalle de un Aplicativo
+- **Ruta:** `/{API_PREFIX}aplicativos/<id>/`
+- **Método:** `GET`
+- **Validación de Seguridad:**
+  - Si el usuario cuenta con el permiso o es superusuario: `200 OK`.
+  - Si el usuario está autenticado pero no tiene los permisos: `403 Forbidden` (`PERMISSION_DENIED`).
+  - Si el aplicativo requiere permisos y el usuario es anónimo: `401 Unauthorized` (`UNAUTHORIZED`).
+
+#### D. Actualizar Aplicativo
+- **Ruta:** `/{API_PREFIX}aplicativos/<id>/`
+- **Método:** `PUT` / `PATCH`
+- **Campos modificables:** `nombre`, `url`, `logo`, `logo_archivo`, `descripcion`, `orden`, `activo`, `permiso_requerido`, `grupos`, `permisos`.
+
+#### E. Eliminar Aplicativo
+- **Ruta:** `/{API_PREFIX}aplicativos/<id>/`
+- **Método:** `DELETE`
+- **Response Exitosa (`200 OK`):**
+  ```json
+  {
+      "success": true,
+      "message": "Aplicativo 'ERP SAP' eliminado exitosamente.",
+      "data": { "id": 1, "nombre": "ERP SAP" }
   }
   ```
 

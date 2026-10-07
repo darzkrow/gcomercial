@@ -13,6 +13,11 @@ from .utils import (
     api_login_required,
     api_staff_required,
 )
+from core.jwt_auth import (
+    generate_jwt_tokens,
+    decode_jwt_token,
+    JwtAuthError,
+)
 
 
 # ==============================================================================
@@ -25,7 +30,8 @@ def api_login(request):
     """
     POST /{API_PREFIX}auth/login/
     Inicia sesión validando credenciales contra Active Directory (AD/LDAP) o base local.
-    Verifica pertenencia a grupos/GPO autorizados y sincroniza el perfil.
+    Verifica pertenencia a grupos/GPO autorizados, sincroniza el perfil y emite
+    tokens JWT de acceso y refresco de forma segura.
     """
     data, error = parse_json_body(request)
     if error:
@@ -68,10 +74,45 @@ def api_login(request):
     else:
         request.session.set_expiry(0)  # Expira al cerrar el navegador
 
+    # Generación segura de tokens JWT
+    tokens = generate_jwt_tokens(user)
+
     return json_success(
-        data={"user": serialize_user(user)},
+        data={
+            "user": serialize_user(user),
+            "tokens": tokens,
+        },
         message=f"Bienvenido/a, {user.get_full_name() or user.username}."
     )
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_refresh_token(request):
+    """
+    POST /{API_PREFIX}auth/refresh/
+    Renueva el token de acceso JWT utilizando un refresh_token válido y vigente.
+    """
+    data, error = parse_json_body(request)
+    if error:
+        return error
+
+    refresh_token = str(data.get("refresh_token", "")).strip()
+    if not refresh_token:
+        return json_error("El campo 'refresh_token' es obligatorio.", status=400, code="MISSING_REFRESH_TOKEN")
+
+    try:
+        payload = decode_jwt_token(refresh_token, expected_type='refresh')
+    except JwtAuthError as err:
+        return json_error(err.message, status=err.status, code=err.code)
+
+    user_id = payload.get('user_id')
+    user = User.objects.filter(id=user_id, is_active=True).first()
+    if not user:
+        return json_error("El usuario asociado a este token no existe o ha sido desactivado.", status=401, code="USER_INACTIVE")
+
+    new_tokens = generate_jwt_tokens(user)
+    return json_success(data=new_tokens, message="Token de acceso renovado exitosamente.")
 
 
 @csrf_exempt

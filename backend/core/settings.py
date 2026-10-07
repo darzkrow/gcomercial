@@ -56,6 +56,14 @@ CSRF_TRUSTED_ORIGINS = env('CSRF_TRUSTED_ORIGINS')
 _api_prefix_raw = env('API_PREFIX', default='api/v1/').strip('/')
 API_PREFIX = f"{_api_prefix_raw}/" if _api_prefix_raw else "api/v1/"
 
+# ==============================================================================
+# AUTENTICACIÓN SEGURA MEDIANTE TOKENS JWT
+# ==============================================================================
+JWT_SECRET_KEY = env('JWT_SECRET_KEY', default=SECRET_KEY)
+JWT_ALGORITHM = env('JWT_ALGORITHM', default='HS256')
+JWT_ACCESS_EXPIRATION_MINUTES = env.int('JWT_ACCESS_EXPIRATION_MINUTES', default=60)
+JWT_REFRESH_EXPIRATION_DAYS = env.int('JWT_REFRESH_EXPIRATION_DAYS', default=7)
+
 
 # Application definition
 
@@ -67,6 +75,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'Dashboard.apps.DashboardConfig',
+    'aplicativos.apps.AplicativosConfig',
 ]
 
 MIDDLEWARE = [

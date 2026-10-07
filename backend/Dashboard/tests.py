@@ -97,6 +97,27 @@ class RestApiViewsTests(TestCase):
         self.assertTrue(data['success'])
         self.assertEqual(data['data']['user']['username'], 'ana.lopez')
         self.assertEqual(data['data']['user']['profile']['department'], 'Ventas')
+        self.assertIn('tokens', data['data'])
+        self.assertIn('access_token', data['data']['tokens'])
+        self.assertIn('refresh_token', data['data']['tokens'])
+
+    def test_refresh_token_success(self):
+        """Verifica la renovación exitosa de tokens JWT mediante /api/v1/auth/refresh/."""
+        login_resp = self.client.post(
+            '/api/v1/auth/login/',
+            data=json.dumps({'username': 'ana.lopez', 'password': self.password}),
+            content_type='application/json'
+        )
+        refresh_token = login_resp.json()['data']['tokens']['refresh_token']
+
+        refresh_resp = self.client.post(
+            '/api/v1/auth/refresh/',
+            data=json.dumps({'refresh_token': refresh_token}),
+            content_type='application/json'
+        )
+        self.assertEqual(refresh_resp.status_code, 200)
+        self.assertTrue(refresh_resp.json()['success'])
+        self.assertIn('access_token', refresh_resp.json()['data'])
 
     def test_login_missing_credentials(self):
         """Login sin password o username debe retornar 400."""

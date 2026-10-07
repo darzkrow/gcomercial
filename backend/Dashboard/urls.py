@@ -11,6 +11,7 @@ urlpatterns = [
     path('auth/login/', views.api_login, name='api_login'),
     path('auth/logout/', views.api_logout, name='api_logout'),
     path('auth/me/', views.api_me, name='api_me'),
+    path('auth/refresh/', views.api_refresh_token, name='api_refresh_token'),
 
     # Perfil de Usuario
     path('profile/', views.api_profile, name='api_profile'),
